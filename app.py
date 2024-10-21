@@ -1,8 +1,128 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from ttkbootstrap import Style
+
+from tkinter import messagebox
+
+
 import mysql.connector
 from mysql.connector import Error
 import hashlib
+
+
+script_sql= """
+CREATE SCHEMA IF NOT EXISTS servicio_tecnico;
+
+USE servicio_tecnico;
+
+-- Tabla de usuarios para el ingreso
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    rol VARCHAR(255) NOT NULL,
+    contraseña VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cliente (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    compania VARCHAR(50) DEFAULT null,
+    compania_contacto VARCHAR(255) DEFAULT null,
+    direccion VARCHAR(255),
+    ciudad_provincia_codigoPostal VARCHAR(255),
+    telefono VARCHAR(255),
+    correo VARCHAR(255),
+    cuit_dni VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS reparaciones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente int NOT NULL,
+    id_equipo int NOT NULL,
+    fecha_ingreso DATE NOT NULL,
+    estado VARCHAR(50) DEFAULT 'Pendiente',
+    fecha_salida DATE,
+    costo DECIMAL(10, 2) DEFAULT 0.00,
+
+    CONSTRAINT `cliente_id_reparaciones`
+    FOREIGN KEY (`id_cliente`)
+	REFERENCES `cliente` (`id`)
+	ON DELETE CASCADE
+	ON UPDATE NO ACTION,
+    
+
+    CONSTRAINT `equipo_id_reparaciones`
+	FOREIGN KEY (`id_equipo`)
+	REFERENCES `equipo` (`id`)
+	ON DELETE CASCADE
+	ON UPDATE NO ACTION
+);
+
+CREATE TABLE equipo (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    marca_pc VARCHAR(100) NOT NULL,
+    modelo_pc VARCHAR(100) NOT NULL,
+    serial_pc VARCHAR(100),
+    procesador VARCHAR(100),
+    velocidad_ghz VARCHAR(100),
+    serial_procesador VARCHAR(100),
+    memoria_ram VARCHAR(100),
+    ram_gb VARCHAR(100),
+    serial_ram VARCHAR(100),
+    disco_marca VARCHAR(100),
+    disco_gb VARCHAR(100),
+    serial_hd VARCHAR(100),
+    tarjeta_video VARCHAR(100),
+    tarjeta_tipo VARCHAR(100),
+    serial_tarjeta VARCHAR(100),
+    puertos_dim VARCHAR(100),
+    puertos_sodimm VARCHAR(100),
+    datos_falla TEXT NOT NULL
+    
+);
+
+"""
+def crear_db():
+    try:
+        conexion = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password=""
+        )
+        if conexion.is_connected():
+            consulta_db = "select schema_name from information_schema.schemata where schema_name = 'servicio_tecnico'"
+            cursor = conexion.cursor()
+            cursor.execute(consulta_db)
+            result = cursor.fetchone()
+            if not result:
+                cursor.execute(script_sql)
+                conexion.commit()
+            cursor.close()
+            conexion.close()
+    except Error as e:
+        messagebox.showerror("Error de Conexión", f"Error al crear la base de datos:\n{e}")
+
+def crear_admin():
+    try:
+        conexion = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="",
+            database="servicio_tecnico"
+        )
+        if conexion.is_connected():
+            cursor = conexion.cursor()
+            cursor.execute("SELECT * FROM usuarios WHERE nombre = 'admin'")
+            result = cursor.fetchone()
+            if not result:
+                cursor.execute("INSERT INTO usuarios (nombre, rol, contraseña) VALUES ('admin', 'admin', 'admin')")
+                conexion.commit()
+                messagebox.showinfo("Éxito", "Usuario administrador creado correctamente.")
+            cursor.close()
+            conexion.close()
+    except Error as e:
+        messagebox.showerror("Error de Conexión", f"Error al crear el usuario administrador:\n{e}")
 
 # --- Configuración de la Base de Datos ---
 def conectar_db():
@@ -24,7 +144,7 @@ def verificar_login(username, password):
     conexion = conectar_db()
     if conexion:
         cursor = conexion.cursor()
-        query = "SELECT * FROM usuarios WHERE username = %s AND password = %s"
+        query = "SELECT * FROM usuarios WHERE nombre = %s AND contraseña = %s"
         cursor.execute(query, (username, password))
         result = cursor.fetchone()
         cursor.close()
@@ -35,6 +155,9 @@ def verificar_login(username, password):
             return False
     return False
 
+crear_db()
+crear_admin()
+
 # --- Ventana de Login ---
 class LoginWindow:
     def __init__(self, master):
@@ -43,21 +166,25 @@ class LoginWindow:
         self.master.geometry("300x200")
         self.master.resizable(False, False)
 
+        # Configuración de la cuadrícula
+        self.master.columnconfigure(0, weight=1)  # Columna para las etiquetas (derecha)
+        self.master.columnconfigure(1, weight=3)  # Columna para las entradas (izquierda)
+
         # Usuario
-        self.label_username = tk.Label(master, text="Usuario:")
-        self.label_username.pack(pady=10)
-        self.entry_username = tk.Entry(master)
-        self.entry_username.pack()
+        self.label_username = ttk.Label(master, text="Usuario:")
+        self.label_username.grid(row=0, column=0, padx=10, pady=10, sticky='e')  # Etiqueta alineada a la derecha
+        self.entry_username = ttk.Entry(master, style="dark")  # Cambia tk.Entry a ttk.Entry y bootstyle a style
+        self.entry_username.grid(row=0, column=1, padx=10, pady=10, sticky='w')  # Entrada alineada a la izquierda
 
         # Contraseña
-        self.label_password = tk.Label(master, text="Contraseña:")
-        self.label_password.pack(pady=10)
-        self.entry_password = tk.Entry(master, show="*")
-        self.entry_password.pack()
+        self.label_password = ttk.Label(master, text="Contraseña:")
+        self.label_password.grid(row=1, column=0, padx=10, pady=10, sticky='e')  # Etiqueta alineada a la derecha
+        self.entry_password = ttk.Entry(master, show="*", style="dark")  # Cambia tk.Entry a ttk.Entry y bootstyle a style
+        self.entry_password.grid(row=1, column=1, padx=10, pady=10, sticky='w')  # Entrada alineada a la izquierda
 
-        # Botón de Login
-        self.button_login = tk.Button(master, text="Ingresar", command=self.login)
-        self.button_login.pack(pady=20)
+        # Botón de Login (debajo de los inputs)
+        self.button_login = ttk.Button(master, text="Ingresar", command=self.login, style="dark")  # Cambia tk.Button a ttk.Button
+        self.button_login.grid(row=2, column=0, columnspan=2, pady=20)  # Botón centrado
 
     def login(self):
         username = self.entry_username.get()
@@ -260,3 +387,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = LoginWindow(root)
     root.mainloop()
+
